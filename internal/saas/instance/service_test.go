@@ -16,7 +16,7 @@ import (
 
 func testDB(t *testing.T) *store.DB {
 	t.Helper()
-	gdb, err := gorm.Open(sqlite.Open("file:" + t.Name() + "?mode=memory&cache=shared"), &gorm.Config{
+	gdb, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{
 		Logger:                                   logger.Default.LogMode(logger.Silent),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
@@ -169,4 +169,120 @@ func TestOwnership(t *testing.T) {
 
 	_, err = svc.Get(inst.ID, u2.ID)
 	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestApplyFillReportIdempotent(t *testing.T) {
+	db := testDB(t)
+	svc := NewService(db)
+	require.NoError(t, svc.EnsureTemplates())
+	u := store.User{Email: "fill@x.y", PasswordHash: "x"}
+	require.NoError(t, db.Create(&u).Error)
+
+	inst, err := svc.Create(CreateRequest{
+		UserID: u.ID, TemplateID: lunar.StrategyID, Symbol: "510300", CapitalQuota: 100_000,
+	})
+	require.NoError(t, err)
+
+	in := FillInput{
+		ClientOrderID: "oid-1",
+		InstanceID:    inst.ID,
+		Symbol:        "510300",
+		Action:        store.ActionBuy,
+		Engine:        store.EngineMacro,
+		Qty:           1000,
+		Price:         10,
+		Fee:           30,
+		Status:        "filled",
+	}
+	require.NoError(t, svc.ApplyFillReport(in))
+
+	port, err := svc.GetPortfolio(inst.ID)
+	require.NoError(t, err)
+	require.InDelta(t, 100_000-10_000-30, port.CNYBalance, 1e-6)
+	require.InDelta(t, 1000, port.DeadHold, 1e-9)
+
+	require.NoError(t, svc.ApplyFillReport(in))
+	port2, err := svc.GetPortfolio(inst.ID)
+	require.NoError(t, err)
+	require.InDelta(t, port.CNYBalance, port2.CNYBalance, 1e-9)
+	require.InDelta(t, port.DeadHold, port2.DeadHold, 1e-9)
+
+	var trades []store.TradeRecord
+	require.NoError(t, db.Where("client_order_id = ?", "oid-1").Find(&trades).Error)
+	require.Len(t, trades, 1)
+	require.Equal(t, store.ActionBuy, trades[0].Action)
+	require.Equal(t, store.EngineMacro, trades[0].Engine)
+
+	var exec store.SpotExecution
+	require.NoError(t, db.Where("client_order_id = ?", "oid-1").First(&exec).Error)
+	require.Equal(t, store.ExecFilled, exec.Status)
+	require.InDelta(t, 1000, exec.FilledQty, 1e-9)
+}
+
+func TestApplyFillReportFailed(t *testing.T) {
+	db := testDB(t)
+	svc := NewService(db)
+	require.NoError(t, svc.EnsureTemplates())
+	u := store.User{Email: "fail@x.y", PasswordHash: "x"}
+	require.NoError(t, db.Create(&u).Error)
+	inst, err := svc.Create(CreateRequest{
+		UserID: u.ID, TemplateID: lunar.StrategyID, Symbol: "518880", CapitalQuota: 50_000,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.RecordPendingExecution(inst.ID, "oid-fail", "518880", store.ActionBuy, 100))
+	require.NoError(t, svc.ApplyFillReport(FillInput{
+		ClientOrderID: "oid-fail",
+		InstanceID:    inst.ID,
+		Symbol:        "518880",
+		Action:        store.ActionBuy,
+		Engine:        store.EngineMicro,
+		Status:        "failed",
+		ErrorMsg:      "rejected",
+	}))
+
+	port, err := svc.GetPortfolio(inst.ID)
+	require.NoError(t, err)
+	require.InDelta(t, 50_000, port.CNYBalance, 1e-9)
+
+	var exec store.SpotExecution
+	require.NoError(t, db.Where("client_order_id = ?", "oid-fail").First(&exec).Error)
+	require.Equal(t, store.ExecFailed, exec.Status)
+	require.Equal(t, "rejected", exec.ErrorMsg)
+
+	require.NoError(t, svc.ApplyFillReport(FillInput{
+		ClientOrderID: "oid-fail", InstanceID: inst.ID, Status: "failed", ErrorMsg: "rejected",
+	}))
+}
+
+func TestRecordPendingThenFill(t *testing.T) {
+	db := testDB(t)
+	svc := NewService(db)
+	require.NoError(t, svc.EnsureTemplates())
+	u := store.User{Email: "pend@x.y", PasswordHash: "x"}
+	require.NoError(t, db.Create(&u).Error)
+	inst, err := svc.Create(CreateRequest{
+		UserID: u.ID, TemplateID: lunar.StrategyID, Symbol: "159915", CapitalQuota: 20_000,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, svc.RecordPendingExecution(inst.ID, "oid-p", "159915", store.ActionBuy, 200))
+	var exec store.SpotExecution
+	require.NoError(t, db.Where("client_order_id = ?", "oid-p").First(&exec).Error)
+	require.Equal(t, store.ExecPending, exec.Status)
+
+	require.NoError(t, svc.ApplyFillReport(FillInput{
+		ClientOrderID: "oid-p",
+		InstanceID:    inst.ID,
+		Symbol:        "159915",
+		Action:        store.ActionBuy,
+		Engine:        store.EngineMicro,
+		Qty:           200,
+		Price:         1.5,
+		Fee:           1,
+		Status:        "filled",
+	}))
+	require.NoError(t, db.Where("client_order_id = ?", "oid-p").First(&exec).Error)
+	require.Equal(t, store.ExecFilled, exec.Status)
+	require.InDelta(t, 200, exec.FilledQty, 1e-9)
 }
