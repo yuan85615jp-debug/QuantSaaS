@@ -18,6 +18,7 @@
 - [x] **Phase 10 — Ticker（cron Step 自动下单）**
 - [x] **Phase 11 — 前端 SPA（embed）**
 - [x] **Phase 12 — Docker Compose**
+- [x] **Phase 13 — K 线喂入 + Paper Demo**
 
 ## 本地验证
 
@@ -27,6 +28,7 @@ export QS_JWT_SECRET=dev-secret-change-me
 go test ./internal/saas/... ./internal/agent/... ./internal/quant/... -count=1
 go build -o bin/saas ./cmd/saas
 go build -o bin/agent ./cmd/agent
+go build -o bin/seed ./cmd/seed
 ```
 
 ## 启动
@@ -35,7 +37,9 @@ go build -o bin/agent ./cmd/agent
 export QS_JWT_SECRET=dev-secret-change-me
 export QS_DB_PASSWORD=...
 go run ./cmd/saas -config configs/config.yaml
-# http://localhost:8080
+
+go run ./cmd/seed -config configs/config.yaml -users
+./scripts/demo_paper.sh
 ```
 
 ## Docker
@@ -43,6 +47,8 @@ go run ./cmd/saas -config configs/config.yaml
 ```bash
 docker compose up --build
 ```
+
+详见 `docs/PHASE13.md`。
 
 ## License
 
