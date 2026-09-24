@@ -19,17 +19,33 @@
 - [x] Phase 5 — GA 进化引擎
 - [x] Phase 6 — 策略实例生命周期
 - [x] Phase 7 — LocalAgent
-- [x] **Phase 8 — WebSocket 通道**
-  - `internal/saas/ws` — Hub / Session / JWT Upgrade
-  - `internal/agent/wsclient` — 重连、心跳、接单回填
-  - protocol codec（JSON Wire）
-- [ ] Phase 9–13 — API / 前端 / Docker
+- [x] Phase 8 — WebSocket 通道
+- [x] **Phase 9 — REST API + cmd/saas**
+  - 登录 / 注册 / Agent 登录
+  - 实例 CRUD、Start/Stop、Portfolio
+  - `POST .../trades` → Hub.SendTrade
+  - FillBridge → instance.ApplyFill
+- [ ] Phase 10–13 — cron Step / 前端 / Docker
 
 ## 本地验证
 
 ```bash
-go test ./internal/quant/ ./internal/strategies/lunar/ ./internal/saas/ga/ ./internal/saas/instance/ ./internal/agent/... ./internal/saas/ws/ -count=1
+export QS_JWT_SECRET=dev-secret-change-me
+
+go test ./internal/quant/ ./internal/strategies/lunar/ ./internal/saas/ga/ \
+  ./internal/saas/instance/ ./internal/agent/... ./internal/saas/ws/ \
+  ./internal/saas/auth/ ./internal/saas/api/ -count=1
+
 go build -o bin/agent ./cmd/agent
+go build -o bin/saas ./cmd/saas
+```
+
+## 启动 SaaS
+
+```bash
+export QS_JWT_SECRET=dev-secret-change-me
+export QS_DB_PASSWORD=...
+go run ./cmd/saas -config configs/config.yaml
 ```
 
 ## License
