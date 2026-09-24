@@ -12,6 +12,7 @@ import (
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/auth"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/instance"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/market"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/store"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ws"
 	"go.uber.org/zap"
@@ -19,15 +20,16 @@ import (
 
 // Server holds dependencies for REST handlers.
 type Server struct {
-	Users *auth.UserService
-	Auth  *auth.Service
-	Inst  *instance.Service
-	Hub   *ws.Hub
-	Cfg   *config.Config
-	Log   *zap.Logger
+	Users  *auth.UserService
+	Auth   *auth.Service
+	Inst   *instance.Service
+	Market *market.Service
+	Hub    *ws.Hub
+	Cfg    *config.Config
+	Log    *zap.Logger
 }
 
-// Routes returns the root mux with all Phase 9 endpoints.
+// Routes returns the root mux with all Phase 9+ endpoints.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
@@ -45,6 +47,12 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/v1/instances/{id}/stop", authMW(http.HandlerFunc(s.handleStopInstance)))
 	mux.Handle("GET /api/v1/instances/{id}/portfolio", authMW(http.HandlerFunc(s.handleGetPortfolio)))
 	mux.Handle("POST /api/v1/instances/{id}/trades", authMW(http.HandlerFunc(s.handleSendTrade)))
+
+	// Market data (auth required for write; last price readable with auth for agent mark)
+	mux.Handle("POST /api/v1/klines/import", authMW(http.HandlerFunc(s.handleImportKlines)))
+	mux.Handle("POST /api/v1/klines/seed", authMW(http.HandlerFunc(s.handleSeedKlines)))
+	mux.Handle("GET /api/v1/klines", authMW(http.HandlerFunc(s.handleListKlines)))
+	mux.Handle("GET /api/v1/klines/last", authMW(http.HandlerFunc(s.handleLastKline)))
 
 	return mux
 }
@@ -108,6 +116,7 @@ func (s *Server) handleAgentLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "login failed")
 		return
 	}
+	// Agent client only expects {token}
 	writeJSON(w, http.StatusOK, map[string]string{"token": resp.Token})
 }
 
