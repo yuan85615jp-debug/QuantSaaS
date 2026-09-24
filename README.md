@@ -20,33 +20,33 @@
 
 ## 文档真源
 
-- [系统总体拓扑结构](docs/系统总体拓扑结构.md)（待完整上传）
-- [策略数学引擎](docs/策略数学引擎.md) — **已增强**：宏观老农定投基因 + PDE 狙击手（kp/kv/ka）+ 库存桥
-- [进化计算引擎](docs/进化计算引擎.md) — **已增强**：三层冻结（Environment/Season/Genes）、正交交叉、全悲观摩擦、MC 终审、1-4-5 种群
+- [策略数学引擎](docs/策略数学引擎.md) — 宏观老农 + PDE 狙击手 + 库存桥
+- [进化计算引擎](docs/进化计算引擎.md) — 三层冻结、全悲观摩擦、正交交叉
 
-## 开发进度（按 Plan Phase）
+## 开发进度
 
-- [x] Phase 0 — 环境初始化与 AI 协作基础设施
-- [x] Phase 1 — 三份真源文档（骨架 + GA 模块增强整合）
-- [ ] Phase 2 — 基础设施层（Config + DB + Auth）
+- [x] Phase 0 — 环境初始化
+- [x] Phase 1 — 真源文档
+- [x] **Phase 2 — 基础设施层（Config + DB + Auth）**
+  - `internal/saas/config` — AppRole / YAML + 环境变量密钥
+  - `internal/saas/store` — 全量 GORM 模型 + AutoMigrate + Redis 缓存
+  - `internal/saas/auth` — JWT Sign/Parse（已有单元测试）
 - [ ] Phase 3 — 量化数学基础层
 - [ ] Phase 4 — 策略模块 Step()
 - [ ] Phase 5 — GA 进化引擎
-- [ ] Phase 6 — 实例生命周期 + Cron
-- [ ] Phase 7 — LocalAgent
-- [ ] Phase 8 — WebSocket Hub
-- [ ] Phase 9 — REST API
-- [ ] Phase 10 — 系统入口
-- [ ] Phase 11 — 测试与验证
-- [ ] Phase 12 — Web 前端
-- [ ] Phase 13 — Docker 部署
+- [ ] Phase 6–13 — 实例/Agent/WS/API/前端/Docker
 
-## 快速开始（开发中）
+## 本地验证 Phase 2
 
 ```bash
-go mod download
-go list ./...
+export QS_JWT_SECRET=dev-secret-change-me
+go test ./internal/saas/auth/ -count=1
+# 有 Postgres 时可：
+# export QS_DB_PASSWORD=...
+# 在代码中调用 store.NewDB(cfg, log) 会 AutoMigrate 全部表
 ```
+
+环境变量：`QS_APP_ROLE`、`QS_DB_PASSWORD`、`QS_DB_HOST`、`QS_REDIS_*`、`QS_JWT_SECRET`、`QS_HTTP_ADDR`
 
 ## License
 
