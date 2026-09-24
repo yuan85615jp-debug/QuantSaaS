@@ -7,18 +7,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/agent/broker"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/agent/client"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/agent/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/agent/executor"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/agent/wsclient"
 	"go.uber.org/zap"
 )
 
-// LocalAgent entry: load local config, init broker, resolve SaaS token.
-// WebSocket session and full TradeCommand loop land in Phase 8.
-// Iron rule: this binary must not import strategy packages.
 func main() {
 	cfgPath := flag.String("config", "configs/config.agent.yaml", "path to config.agent.yaml")
 	flag.Parse()
@@ -53,25 +50,37 @@ func main() {
 			LotMin:         cfg.Broker.LotMin,
 		})
 	default:
-		log.Fatal("unsupported broker driver (Phase 7 ships paper only)",
-			zap.String("driver", cfg.Broker.Driver))
+		log.Fatal("unsupported broker driver", zap.String("driver", cfg.Broker.Driver))
 	}
 
 	ex := executor.New(b, cfg.AgentID)
-	_ = ex // used by Phase 8 WS session loop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	token, err := client.ResolveToken(ctx, cfg.SaaS.BaseURL, cfg.SaaS.Email, cfg.SaaS.Password, cfg.SaaS.Token)
 	if err != nil {
-		log.Warn("saas token not resolved; running offline paper mode", zap.Error(err))
-	} else {
-		log.Info("saas token ready", zap.Int("token_len", len(token)))
+		log.Warn("saas token not resolved; WS disabled (offline paper only)", zap.Error(err))
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		return
 	}
 
-	log.Info("agent ready (Phase 7); waiting for Phase 8 WS session")
+	ws := &wsclient.Client{
+		BaseURL:     cfg.SaaS.BaseURL,
+		Token:       token,
+		AgentID:     cfg.AgentID,
+		InstanceIDs: cfg.Instances,
+		Executor:    ex,
+		Log:         log,
+		MarkPriceProvider: func(string) float64 { return 0 },
+	}
+	go ws.Run(ctx)
+
+	log.Info("agent WS session started")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
+	cancel()
 	log.Info("agent shutdown")
 }
