@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QuantSaaS</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>QuantSaaS</h1>
+      <p class="sub">全天候智能量化 · 實例與帳本</p>
+    </header>
+    <section id="auth-panel" class="card">
+      <h2>登入 / 註冊</h2>
+      <div class="row">
+        <input id="email" type="email" placeholder="email" />
+        <input id="password" type="password" placeholder="password (≥6)" />
+      </div>
+      <div class="row">
+        <button id="btn-login">登入</button>
+        <button id="btn-register" class="secondary">註冊</button>
+      </div>
+      <p id="auth-msg" class="msg"></p>
+    </section>
+    <section id="main-panel" class="hidden">
+      <div class="card">
+        <div class="row between">
+          <h2>策略實例</h2>
+          <button id="btn-logout" class="secondary">登出</button>
+        </div>
+        <div class="row">
+          <input id="symbol" placeholder="標的 如 510300" value="510300" />
+          <input id="capital" type="number" placeholder="初始資金" value="100000" />
+          <button id="btn-create">建立 lunar 實例</button>
+          <button id="btn-refresh" class="secondary">重新整理</button>
+        </div>
+        <div id="instances" class="list"></div>
+      </div>
+      <div class="card" id="detail-panel">
+        <h2>實例詳情</h2>
+        <p id="detail-empty" class="muted">選擇實例</p>
+        <div id="detail" class="hidden">
+          <pre id="detail-json"></pre>
+          <div class="row">
+            <button id="btn-start">啟動</button>
+            <button id="btn-stop" class="secondary">停止</button>
+            <button id="btn-portfolio" class="secondary">帳本</button>
+          </div>
+          <pre id="portfolio-json"></pre>
+          <h3>手動下單（需 Agent 在線）</h3>
+          <div class="row">
+            <select id="side"><option>BUY</option><option>SELL</option></select>
+            <select id="engine"><option>MICRO</option><option>MACRO</option></select>
+            <input id="qty" type="number" value="100" />
+            <button id="btn-trade">SendTrade</button>
+          </div>
+          <p id="detail-msg" class="msg"></p>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -12,40 +12,36 @@
 
 ## 开发进度
 
-- [x] Phase 0–1 — 环境与文档
-- [x] Phase 2 — Config + DB + Auth
-- [x] Phase 3 — `internal/quant`
-- [x] Phase 4 — `lunar` Step()
-- [x] Phase 5 — GA 进化引擎
-- [x] Phase 6 — 策略实例生命周期
-- [x] Phase 7 — LocalAgent
-- [x] Phase 8 — WebSocket 通道
-- [x] **Phase 9 — REST API + cmd/saas**
-  - 登录 / 注册 / Agent 登录
-  - 实例 CRUD、Start/Stop、Portfolio
-  - `POST .../trades` → Hub.SendTrade
-  - FillBridge → instance.ApplyFill
-- [ ] Phase 10–13 — cron Step / 前端 / Docker
+- [x] Phase 0–8 — 核心引擎、实例、Agent、WebSocket
+- [x] Phase 9 — REST API + cmd/saas + FillBridge
+- [x] TradeRecord 落库与 client_order_id 幂等
+- [x] **Phase 10 — Ticker（cron Step 自动下单）**
+- [x] **Phase 11 — 前端 SPA（embed）**
+- [x] **Phase 12 — Docker Compose**
 
 ## 本地验证
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
 
-go test ./internal/quant/ ./internal/strategies/lunar/ ./internal/saas/ga/ \
-  ./internal/saas/instance/ ./internal/agent/... ./internal/saas/ws/ \
-  ./internal/saas/auth/ ./internal/saas/api/ -count=1
-
-go build -o bin/agent ./cmd/agent
+go test ./internal/saas/... ./internal/agent/... ./internal/quant/... -count=1
 go build -o bin/saas ./cmd/saas
+go build -o bin/agent ./cmd/agent
 ```
 
-## 启动 SaaS
+## 启动
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
 export QS_DB_PASSWORD=...
 go run ./cmd/saas -config configs/config.yaml
+# http://localhost:8080
+```
+
+## Docker
+
+```bash
+docker compose up --build
 ```
 
 ## License
