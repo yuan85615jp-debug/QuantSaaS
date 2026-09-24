@@ -1,0 +1,24 @@
+# LocalAgent configuration EXAMPLE — copy to config.agent.yaml (gitignored).
+# Broker API keys MUST stay on this machine. Never commit real secrets.
+
+agent_id: "agent-local-1"
+
+saas:
+  base_url: "http://127.0.0.1:8080"
+  email: "agent@example.com"
+  password: ""          # prefer env QS_AGENT_PASSWORD
+  token: ""             # prefer env QS_AGENT_TOKEN (skips login)
+
+broker:
+  driver: paper         # paper | (future live drivers)
+  api_key: ""           # prefer env QS_BROKER_API_KEY
+  api_secret: ""        # prefer env QS_BROKER_API_SECRET
+  account_id: ""
+  commission_rate: 0.0003
+  stamp_tax_rate: 0.001
+  initial_cash: 100000  # paper only
+  lot_step: 100
+  lot_min: 100
+
+# Instance IDs this agent is allowed to execute for (optional filter).
+instances: []
