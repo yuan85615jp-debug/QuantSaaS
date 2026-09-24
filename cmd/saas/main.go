@@ -16,6 +16,7 @@ import (
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/auth"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/instance"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/market"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/store"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ticker"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ws"
@@ -53,6 +54,7 @@ func main() {
 	authSvc := auth.NewService(cfg)
 	userSvc := auth.NewUserService(db, authSvc)
 	instSvc := instance.NewService(db)
+	mktSvc := market.New(db)
 	if err := instSvc.EnsureTemplates(); err != nil {
 		log.Fatal("ensure templates", zap.Error(err))
 	}
@@ -72,7 +74,7 @@ func main() {
 
 	wsHandler := &ws.Handler{Hub: hub, Auth: authSvc, Log: log}
 	apiSrv := &api.Server{
-		Users: userSvc, Auth: authSvc, Inst: instSvc, Hub: hub, Cfg: cfg, Log: log,
+		Users: userSvc, Auth: authSvc, Inst: instSvc, Market: mktSvc, Hub: hub, Cfg: cfg, Log: log,
 	}
 	apiMux := apiSrv.Routes()
 
