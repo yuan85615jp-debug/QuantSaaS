@@ -20,33 +20,32 @@
 
 ## 文档真源
 
-- [策略数学引擎](docs/策略数学引擎.md) — 宏观老农 + PDE 狙击手 + 库存桥
-- [进化计算引擎](docs/进化计算引擎.md) — 三层冻结、全悲观摩擦、正交交叉
+- [策略数学引擎](docs/策略数学引擎.md)
+- [进化计算引擎](docs/进化计算引擎.md)
 
 ## 开发进度
 
 - [x] Phase 0 — 环境初始化
 - [x] Phase 1 — 真源文档
-- [x] **Phase 2 — 基础设施层（Config + DB + Auth）**
-  - `internal/saas/config` — AppRole / YAML + 环境变量密钥
-  - `internal/saas/store` — 全量 GORM 模型 + AutoMigrate + Redis 缓存
-  - `internal/saas/auth` — JWT Sign/Parse（已有单元测试）
-- [ ] Phase 3 — 量化数学基础层
+- [x] Phase 2 — Config + DB + Auth
+- [x] **Phase 3 — 量化数学基础层 (`internal/quant`)**
+  - `math.go` — 对数收益、EMA/SMA、MaxDD、ROI
+  - `bar.go` — OHLCV
+  - `portfolio.go` — 仓位三态与权益公式
+  - `spawn.go` — 出生点（资金/费率/手数）
+  - `sigmoid.go` — Sigmoid 目标权重 + PDE 信号
+  - `dca.go` — Ghost DCA 基准
+  - `intent.go` — StrategyInput / StrategyOutput
 - [ ] Phase 4 — 策略模块 Step()
 - [ ] Phase 5 — GA 进化引擎
-- [ ] Phase 6–13 — 实例/Agent/WS/API/前端/Docker
+- [ ] Phase 6–13 — 实例 / Agent / WS / API / 前端 / Docker
 
-## 本地验证 Phase 2
+## 本地验证
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
-go test ./internal/saas/auth/ -count=1
-# 有 Postgres 时可：
-# export QS_DB_PASSWORD=...
-# 在代码中调用 store.NewDB(cfg, log) 会 AutoMigrate 全部表
+go test ./internal/saas/auth/ ./internal/quant/ -count=1
 ```
-
-环境变量：`QS_APP_ROLE`、`QS_DB_PASSWORD`、`QS_DB_HOST`、`QS_REDIS_*`、`QS_JWT_SECRET`、`QS_HTTP_ADDR`
 
 ## License
 
