@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: quantsaas
+      POSTGRES_PASSWORD: quantsaas
+      POSTGRES_DB: quantsaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantsaas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  saas:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      QS_APP_ROLE: dev
+      QS_JWT_SECRET: dev-secret-change-me
+      QS_DB_HOST: postgres
+      QS_DB_PASSWORD: quantsaas
+      QS_REDIS_ADDR: redis:6379
+      QS_HTTP_ADDR: ":8080"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

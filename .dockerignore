@@ -1,0 +1,7 @@
+bin/
+.git/
+*.md
+.env
+.env.*
+config.agent.yaml
+*.local.yaml
