@@ -4,7 +4,6 @@ import "github.com/yuan85615jp-debug/QuantSaaS/internal/quant"
 
 const StrategyID = "lunar"
 
-// Params is the evolvable chromosome (macro old-farmer + micro PDE/Sigmoid).
 type Params struct {
 	MaxDCAMonths        float64 `json:"max_dca_months"`
 	BetaThreshold       float64 `json:"beta_threshold"`
@@ -58,4 +57,24 @@ func (p Params) Clamp() Params {
 
 func (p Params) Sigmoid() quant.SigmoidParams {
 	return quant.SigmoidParams{Beta: p.Beta, Gamma: p.Gamma, MarketBetaMultiplier: 1.0}
+}
+
+func (p Params) ToSlice() []float64 {
+	return []float64{
+		p.MaxDCAMonths, p.BetaThreshold, p.MoonPhasePressure, p.DCAFraction, float64(p.EMAPeriod),
+		p.Kp, p.Kv, p.Ka, p.MinTradeThreshold, p.MicroReservePct, p.Beta, p.Gamma,
+		p.ReleaseAccThreshold, p.ReleaseFraction,
+	}
+}
+
+func FromSlice(v []float64) Params {
+	if len(v) < 14 {
+		return DefaultParams()
+	}
+	return Params{
+		MaxDCAMonths: v[0], BetaThreshold: v[1], MoonPhasePressure: v[2], DCAFraction: v[3],
+		EMAPeriod: int(v[4]), Kp: v[5], Kv: v[6], Ka: v[7], MinTradeThreshold: v[8],
+		MicroReservePct: v[9], Beta: v[10], Gamma: v[11],
+		ReleaseAccThreshold: v[12], ReleaseFraction: v[13],
+	}.Clamp()
 }
