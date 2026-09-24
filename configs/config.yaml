@@ -1,0 +1,25 @@
+# QuantSaaS configuration template.
+# Secrets MUST be injected via environment variables in production.
+# Never commit real passwords or JWT secrets.
+
+app_role: dev   # saas | lab | dev
+
+server:
+  http_addr: ":8080"
+
+database:
+  host: "127.0.0.1"
+  port: 5432
+  user: "quantsaas"
+  password: ""          # set via QS_DB_PASSWORD
+  dbname: "quantsaas"
+  sslmode: "disable"
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""          # set via QS_REDIS_PASSWORD
+  db: 0
+
+jwt:
+  secret: "CHANGE_ME"   # set via QS_JWT_SECRET (required)
+  expire_hour: 72
