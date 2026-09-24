@@ -12,6 +12,7 @@ import (
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/auth"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/instance"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/store"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ws"
 	"go.uber.org/zap"
 )
@@ -337,6 +338,8 @@ func (s *Server) handleSendTrade(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "ws hub not available")
 		return
 	}
+	// Reserve client_order_id before dispatch for fill idempotency.
+	_ = s.Inst.RecordPendingExecution(inst.ID, cmd.ClientOrderID, cmd.Symbol, store.TradeAction(side), cmd.Qty)
 	if err := s.Hub.SendTrade(cmd); err != nil {
 		if errors.Is(err, ws.ErrNoAgent) {
 			writeError(w, http.StatusServiceUnavailable, "no online agent for instance")
