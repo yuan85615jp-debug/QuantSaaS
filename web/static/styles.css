@@ -1,0 +1,51 @@
+:root {
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e7ecf3;
+  --muted: #8b9bb4;
+  --accent: #3d8bfd;
+  --accent2: #2a9d8f;
+  --border: #2c3a4f;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; }
+header { padding: 1.5rem 1.25rem 0.5rem; }
+header h1 { margin: 0; font-size: 1.6rem; }
+.sub { color: var(--muted); margin: 0.25rem 0 0; }
+#app { max-width: 960px; margin: 0 auto; padding: 0 1rem 2rem; }
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1rem;
+}
+.row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
+.row.between { justify-content: space-between; }
+input, select {
+  background: #0d1218; border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 0.5rem 0.75rem; min-width: 8rem;
+}
+button {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 0.5rem 1rem; cursor: pointer; font-weight: 600;
+}
+button.secondary { background: #2c3a4f; }
+button:hover { filter: brightness(1.08); }
+.hidden { display: none !important; }
+.msg { color: var(--accent2); min-height: 1.2em; }
+.muted { color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+.item {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem;
+  cursor: pointer; display: flex; justify-content: space-between; gap: 0.5rem;
+}
+.item:hover, .item.active { border-color: var(--accent); background: #152032; }
+.badge {
+  font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 999px; background: #243044;
+}
+.badge.RUNNING { background: #1b4332; color: #95d5b2; }
+.badge.STOPPED { background: #3a3a3a; }
+.badge.ERROR { background: #5c1a1a; color: #f4a261; }
+pre {
+  background: #0d1218; border-radius: 8px; padding: 0.75rem;
+  overflow: auto; font-size: 0.85rem; color: #c5d0e0;
+}
