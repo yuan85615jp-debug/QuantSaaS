@@ -73,7 +73,14 @@ func main() {
 		InstanceIDs: cfg.Instances,
 		Executor:    ex,
 		Log:         log,
-		MarkPriceProvider: func(string) float64 { return 0 },
+		MarkPriceProvider: func(symbol string) float64 {
+			px, err := client.LastClose(context.Background(), cfg.SaaS.BaseURL, token, symbol)
+			if err != nil {
+				log.Debug("mark price fetch failed", zap.String("symbol", symbol), zap.Error(err))
+				return 0
+			}
+			return px
+		},
 	}
 	go ws.Run(ctx)
 
