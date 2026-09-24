@@ -16,16 +16,20 @@
 - [x] Phase 2 — Config + DB + Auth
 - [x] Phase 3 — `internal/quant`
 - [x] Phase 4 — `lunar` Step()
-- [x] **Phase 5 — GA 进化引擎**
+- [x] Phase 5 — GA 进化引擎
   - `internal/adapters/backtest` — 单路径回测（手续费/手数）
   - `internal/saas/ga` — 种群、锦标赛、交叉、变异斜坡
   - `LunarEvolvable` — 四窗 Alpha vs Ghost DCA 适应度
-- [ ] Phase 6–13 — 实例 / Agent / WS / API / 前端 / Docker
+- [x] **Phase 6 — 策略实例生命周期**
+  - `internal/saas/instance` — Create / Start / Stop / Portfolio 账本
+  - EnsureTemplates、Champion 绑定与 Promote
+  - ApplyRelease（库存桥）/ ApplyFill（成交入账）
+- [ ] Phase 7–13 — Agent / WS / API / 前端 / Docker
 
 ## 本地验证
 
 ```bash
-go test ./internal/quant/ ./internal/strategies/lunar/ ./internal/saas/ga/ -count=1
+go test ./internal/quant/ ./internal/strategies/lunar/ ./internal/saas/ga/ ./internal/saas/instance/ -count=1
 ```
 
 快速进化（TestMode：Pop=10, Gen=3）见 `engine_test.go`。
