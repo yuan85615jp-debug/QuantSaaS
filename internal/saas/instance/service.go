@@ -25,6 +25,21 @@ var (
 	ErrForbidden      = errors.New("forbidden")
 )
 
+// FillInput is the SaaS-side application of one Agent FillReport.
+// ClientOrderID is the idempotency key: a second call with the same id is a no-op.
+type FillInput struct {
+	ClientOrderID string
+	InstanceID    uint
+	Symbol        string
+	Action        store.TradeAction
+	Engine        store.TradeEngine
+	Qty           float64
+	Price         float64
+	Fee           float64
+	Status        string // filled | partial | failed
+	ErrorMsg      string
+}
+
 // CreateRequest is the input for spinning up a new strategy instance.
 type CreateRequest struct {
 	UserID       uint
@@ -34,8 +49,6 @@ type CreateRequest struct {
 }
 
 // Service owns StrategyInstance + PortfolioState lifecycle on the SaaS side.
-// Step() is NOT invoked here — Phase 6 only manages ledger and status.
-// TradeCommand dispatch and Agent WS land in later phases.
 type Service struct {
 	db *store.DB
 }
@@ -259,43 +272,205 @@ func (s *Service) ApplyRelease(instanceID uint, qty float64, price float64) erro
 }
 
 func (s *Service) ApplyFill(instanceID uint, action store.TradeAction, engine store.TradeEngine, qty, price, fee float64) error {
-	if qty <= 0 || price <= 0 {
-		return fmt.Errorf("%w: qty and price must be > 0", ErrInvalidInput)
+	return s.applyPortfolioFill(s.db.DB, instanceID, action, engine, qty, price, fee)
+}
+
+// ApplyFillReport persists TradeRecord + SpotExecution and updates the ledger.
+// Idempotent on ClientOrderID: if a TradeRecord already exists for that id, returns nil
+// without mutating the portfolio again (safe under Agent WS redelivery).
+func (s *Service) ApplyFillReport(in FillInput) error {
+	in.ClientOrderID = strings.TrimSpace(in.ClientOrderID)
+	if in.ClientOrderID == "" {
+		return fmt.Errorf("%w: client_order_id required", ErrInvalidInput)
 	}
+	if in.InstanceID == 0 {
+		return fmt.Errorf("%w: instance_id required", ErrInvalidInput)
+	}
+	status := strings.ToLower(strings.TrimSpace(in.Status))
+	if status == "" {
+		status = "filled"
+	}
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		var p store.PortfolioState
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("instance_id = ?", instanceID).First(&p).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrNotFound
+		var existing store.TradeRecord
+		err := tx.Where("client_order_id = ?", in.ClientOrderID).First(&existing).Error
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		var exec store.SpotExecution
+		execErr := tx.Where("client_order_id = ?", in.ClientOrderID).First(&exec).Error
+		if execErr == nil && (exec.Status == store.ExecFilled || exec.Status == store.ExecFailed) {
+			return nil
+		}
+		if execErr != nil && !errors.Is(execErr, gorm.ErrRecordNotFound) {
+			return execErr
+		}
+
+		symbol := strings.ToUpper(strings.TrimSpace(in.Symbol))
+		if symbol == "" {
+			var inst store.StrategyInstance
+			if e := tx.Select("symbol").First(&inst, in.InstanceID).Error; e == nil {
+				symbol = inst.Symbol
+			}
+		}
+
+		if status == "failed" {
+			return s.upsertExecution(tx, in, symbol, store.ExecFailed, 0, 0, 0)
+		}
+
+		if in.Qty <= 0 || in.Price <= 0 {
+			return fmt.Errorf("%w: qty and price must be > 0", ErrInvalidInput)
+		}
+		if in.Action != store.ActionBuy && in.Action != store.ActionSell {
+			return fmt.Errorf("%w: unknown action %s", ErrInvalidInput, in.Action)
+		}
+		if in.Engine != store.EngineMacro && in.Engine != store.EngineMicro {
+			in.Engine = store.EngineMicro
+		}
+
+		if err := s.applyPortfolioFill(tx, in.InstanceID, in.Action, in.Engine, in.Qty, in.Price, in.Fee); err != nil {
+			return err
+		}
+
+		rec := store.TradeRecord{
+			InstanceID:    in.InstanceID,
+			ClientOrderID: in.ClientOrderID,
+			Action:        in.Action,
+			Engine:        in.Engine,
+			Symbol:        symbol,
+			FilledQty:     in.Qty,
+			FilledPrice:   in.Price,
+			Fee:           in.Fee,
+		}
+		if err := tx.Create(&rec).Error; err != nil {
+			if isUniqueViolation(err) {
+				return nil
 			}
 			return err
 		}
-		notional := qty * price
-		switch action {
-		case store.ActionBuy:
-			cost := notional + fee
-			if cost > p.CNYBalance {
-				return fmt.Errorf("%w: insufficient cash (need %.2f have %.2f)", ErrInvalidInput, cost, p.CNYBalance)
-			}
-			p.CNYBalance -= cost
-			if engine == store.EngineMacro {
-				p.DeadHold += qty
-			} else {
-				p.FloatHold += qty
-			}
-		case store.ActionSell:
-			if qty > p.FloatHold {
-				return fmt.Errorf("%w: insufficient float hold", ErrInvalidInput)
-			}
-			p.FloatHold -= qty
-			p.CNYBalance += notional - fee
-		default:
-			return fmt.Errorf("%w: unknown action %s", ErrInvalidInput, action)
-		}
-		p.TotalEquity = p.CNYBalance + (p.DeadHold+p.FloatHold+p.ColdSealedHold)*price
-		return tx.Save(&p).Error
+
+		execStatus := store.ExecFilled
+		return s.upsertExecution(tx, in, symbol, execStatus, in.Qty, in.Price, in.Fee)
 	})
+}
+
+func (s *Service) applyPortfolioFill(tx *gorm.DB, instanceID uint, action store.TradeAction, engine store.TradeEngine, qty, price, fee float64) error {
+	if qty <= 0 || price <= 0 {
+		return fmt.Errorf("%w: qty and price must be > 0", ErrInvalidInput)
+	}
+	var p store.PortfolioState
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("instance_id = ?", instanceID).First(&p).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
+	notional := qty * price
+	switch action {
+	case store.ActionBuy:
+		cost := notional + fee
+		if cost > p.CNYBalance {
+			return fmt.Errorf("%w: insufficient cash (need %.2f have %.2f)", ErrInvalidInput, cost, p.CNYBalance)
+		}
+		p.CNYBalance -= cost
+		if engine == store.EngineMacro {
+			p.DeadHold += qty
+		} else {
+			p.FloatHold += qty
+		}
+	case store.ActionSell:
+		if qty > p.FloatHold {
+			return fmt.Errorf("%w: insufficient float hold", ErrInvalidInput)
+		}
+		p.FloatHold -= qty
+		p.CNYBalance += notional - fee
+	default:
+		return fmt.Errorf("%w: unknown action %s", ErrInvalidInput, action)
+	}
+	p.TotalEquity = p.CNYBalance + (p.DeadHold+p.FloatHold+p.ColdSealedHold)*price
+	return tx.Save(&p).Error
+}
+
+func (s *Service) upsertExecution(tx *gorm.DB, in FillInput, symbol string, status store.ExecutionStatus, filledQty, filledPrice, fee float64) error {
+	var exec store.SpotExecution
+	err := tx.Where("client_order_id = ?", in.ClientOrderID).First(&exec).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		exec = store.SpotExecution{
+			InstanceID:    in.InstanceID,
+			ClientOrderID: in.ClientOrderID,
+			Status:        status,
+			Action:        in.Action,
+			Symbol:        symbol,
+			RequestQty:    in.Qty,
+			FilledQty:     filledQty,
+			FilledPrice:   filledPrice,
+			Fee:           fee,
+			ErrorMsg:      in.ErrorMsg,
+		}
+		return tx.Create(&exec).Error
+	}
+	exec.Status = status
+	exec.FilledQty = filledQty
+	exec.FilledPrice = filledPrice
+	exec.Fee = fee
+	if in.ErrorMsg != "" {
+		exec.ErrorMsg = in.ErrorMsg
+	}
+	if in.Action != "" {
+		exec.Action = in.Action
+	}
+	if symbol != "" {
+		exec.Symbol = symbol
+	}
+	return tx.Save(&exec).Error
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate")
+}
+
+// RecordPendingExecution writes a pending SpotExecution when a TradeCommand is dispatched.
+// Idempotent on client_order_id (existing row is left unchanged).
+func (s *Service) RecordPendingExecution(instanceID uint, clientOrderID, symbol string, action store.TradeAction, requestQty float64) error {
+	clientOrderID = strings.TrimSpace(clientOrderID)
+	if clientOrderID == "" || instanceID == 0 {
+		return fmt.Errorf("%w: client_order_id and instance_id required", ErrInvalidInput)
+	}
+	var existing store.SpotExecution
+	err := s.db.Where("client_order_id = ?", clientOrderID).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	exec := store.SpotExecution{
+		InstanceID:    instanceID,
+		ClientOrderID: clientOrderID,
+		Status:        store.ExecPending,
+		Action:        action,
+		Symbol:        strings.ToUpper(strings.TrimSpace(symbol)),
+		RequestQty:    requestQty,
+	}
+	if err := s.db.Create(&exec).Error; err != nil {
+		if isUniqueViolation(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func ToQuantPortfolio(p *store.PortfolioState) quant.Portfolio {
