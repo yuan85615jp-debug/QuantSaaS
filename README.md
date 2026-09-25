@@ -14,6 +14,7 @@
 
 - [x] Phase 0–13 — 垂直切片（引擎 / 实例 / Agent / WS / API / Ticker / SPA / Docker / K线）
 - [x] **P0 — Paper Demo 固化 + CI**
+- [x] **真实行情喂入（eastmoney feed）**
 
 ## 15 分钟 Paper Demo
 
@@ -24,14 +25,13 @@ until curl -sf http://127.0.0.1:8080/healthz; do sleep 1; done
 START_AGENT=1 ./scripts/demo_paper.sh
 ```
 
-期望输出含：`SUCCESS: instance … portfolio updated`。详见 [`docs/DEMO.md`](docs/DEMO.md)。
+期望输出含：`SUCCESS: instance … portfolio updated`。详见 [`docs/DEMO.md`](docs/DEMO.md)。行情源见 [`docs/MARKET.md`](docs/MARKET.md)。
 
 ## 本地验证 / CI
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
 make ci
-# 等价于 go mod tidy && go test … && go build saas/agent/seed
 ```
 
 GitHub Actions：`.github/workflows/ci.yml`
