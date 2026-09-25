@@ -12,6 +12,7 @@ import (
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/auth"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/instance"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/lab"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/market"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/store"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ws"
@@ -24,6 +25,7 @@ type Server struct {
 	Inst   *instance.Service
 	Market *market.Service
 	Feed   *market.Feed
+	Lab    *lab.Service
 	Hub    *ws.Hub
 	Cfg    *config.Config
 	Log    *zap.Logger
@@ -31,13 +33,10 @@ type Server struct {
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
-
 	mux.HandleFunc("GET /healthz", s.handleHealth)
-
 	mux.HandleFunc("POST /api/v1/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/agent/login", s.handleAgentLogin)
-
 	authMW := AuthMiddleware(s.Auth)
 	mux.Handle("GET /api/v1/instances", authMW(http.HandlerFunc(s.handleListInstances)))
 	mux.Handle("POST /api/v1/instances", authMW(http.HandlerFunc(s.handleCreateInstance)))
@@ -46,13 +45,15 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/v1/instances/{id}/stop", authMW(http.HandlerFunc(s.handleStopInstance)))
 	mux.Handle("GET /api/v1/instances/{id}/portfolio", authMW(http.HandlerFunc(s.handleGetPortfolio)))
 	mux.Handle("POST /api/v1/instances/{id}/trades", authMW(http.HandlerFunc(s.handleSendTrade)))
-
 	mux.Handle("POST /api/v1/klines/import", authMW(http.HandlerFunc(s.handleImportKlines)))
 	mux.Handle("POST /api/v1/klines/seed", authMW(http.HandlerFunc(s.handleSeedKlines)))
 	mux.Handle("GET /api/v1/klines", authMW(http.HandlerFunc(s.handleListKlines)))
 	mux.Handle("GET /api/v1/klines/last", authMW(http.HandlerFunc(s.handleLastKline)))
 	mux.Handle("POST /api/v1/klines/sync", authMW(http.HandlerFunc(s.handleSyncKlines)))
-
+	mux.Handle("POST /api/v1/lab/tasks", authMW(http.HandlerFunc(s.handleCreateLabTask)))
+	mux.Handle("GET /api/v1/lab/tasks", authMW(http.HandlerFunc(s.handleListLabTasks)))
+	mux.Handle("GET /api/v1/lab/tasks/{id}", authMW(http.HandlerFunc(s.handleGetLabTask)))
+	mux.Handle("POST /api/v1/lab/tasks/{id}/run", authMW(http.HandlerFunc(s.handleRunLabTask)))
 	return mux
 }
 
