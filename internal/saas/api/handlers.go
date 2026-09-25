@@ -18,18 +18,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// Server holds dependencies for REST handlers.
 type Server struct {
 	Users  *auth.UserService
 	Auth   *auth.Service
 	Inst   *instance.Service
 	Market *market.Service
+	Feed   *market.Feed
 	Hub    *ws.Hub
 	Cfg    *config.Config
 	Log    *zap.Logger
 }
 
-// Routes returns the root mux with all Phase 9+ endpoints.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
@@ -48,11 +47,11 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /api/v1/instances/{id}/portfolio", authMW(http.HandlerFunc(s.handleGetPortfolio)))
 	mux.Handle("POST /api/v1/instances/{id}/trades", authMW(http.HandlerFunc(s.handleSendTrade)))
 
-	// Market data (auth required for write; last price readable with auth for agent mark)
 	mux.Handle("POST /api/v1/klines/import", authMW(http.HandlerFunc(s.handleImportKlines)))
 	mux.Handle("POST /api/v1/klines/seed", authMW(http.HandlerFunc(s.handleSeedKlines)))
 	mux.Handle("GET /api/v1/klines", authMW(http.HandlerFunc(s.handleListKlines)))
 	mux.Handle("GET /api/v1/klines/last", authMW(http.HandlerFunc(s.handleLastKline)))
+	mux.Handle("POST /api/v1/klines/sync", authMW(http.HandlerFunc(s.handleSyncKlines)))
 
 	return mux
 }
@@ -116,7 +115,6 @@ func (s *Server) handleAgentLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "login failed")
 		return
 	}
-	// Agent client only expects {token}
 	writeJSON(w, http.StatusOK, map[string]string{"token": resp.Token})
 }
 
@@ -144,10 +142,7 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	inst, err := s.Inst.Create(instance.CreateRequest{
-		UserID:       c.UserID,
-		TemplateID:   body.TemplateID,
-		Symbol:       body.Symbol,
-		CapitalQuota: body.CapitalQuota,
+		UserID: c.UserID, TemplateID: body.TemplateID, Symbol: body.Symbol, CapitalQuota: body.CapitalQuota,
 	})
 	if err != nil {
 		status := http.StatusBadRequest
@@ -335,19 +330,13 @@ func (s *Server) handleSendTrade(w http.ResponseWriter, r *http.Request) {
 		clientOID = fmt.Sprintf("api-%d-%d-%s", id, time.Now().UnixMilli(), randomSuffix())
 	}
 	cmd := protocol.TradeCommand{
-		ClientOrderID: clientOID,
-		InstanceID:    inst.ID,
-		Symbol:        inst.Symbol,
-		Side:          side,
-		Engine:        engine,
-		Qty:           body.Qty,
-		OrderType:     orderType,
+		ClientOrderID: clientOID, InstanceID: inst.ID, Symbol: inst.Symbol,
+		Side: side, Engine: engine, Qty: body.Qty, OrderType: orderType,
 	}
 	if s.Hub == nil {
 		writeError(w, http.StatusServiceUnavailable, "ws hub not available")
 		return
 	}
-	// Reserve client_order_id before dispatch for fill idempotency.
 	_ = s.Inst.RecordPendingExecution(inst.ID, cmd.ClientOrderID, cmd.Symbol, store.TradeAction(side), cmd.Qty)
 	if err := s.Hub.SendTrade(cmd); err != nil {
 		if errors.Is(err, ws.ErrNoAgent) {
@@ -358,13 +347,9 @@ func (s *Server) handleSendTrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"status":          "dispatched",
-		"client_order_id": cmd.ClientOrderID,
-		"instance_id":     cmd.InstanceID,
-		"symbol":          cmd.Symbol,
-		"side":            cmd.Side,
-		"engine":          cmd.Engine,
-		"qty":             cmd.Qty,
+		"status": "dispatched", "client_order_id": cmd.ClientOrderID,
+		"instance_id": cmd.InstanceID, "symbol": cmd.Symbol,
+		"side": cmd.Side, "engine": cmd.Engine, "qty": cmd.Qty,
 	})
 }
 
