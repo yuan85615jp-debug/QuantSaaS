@@ -30,7 +30,7 @@ func TestParseRPCEnvelope(t *testing.T) {
 	payload := map[string]any{
 		"result": map[string]any{
 			"content": []map[string]any{
-				{"type": "text", "text": `[{\"t\":1700000000,\"o\":1,\"h\":1,\"l\":1,\"c\":2,\"v\":0}]`},
+				{"type": "text", "text": "[{\"t\":1700000000,\"o\":1,\"h\":1,\"l\":1,\"c\":2,\"v\":0}]"},
 			},
 		},
 	}
