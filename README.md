@@ -12,43 +12,29 @@
 
 ## 开发进度
 
-- [x] Phase 0–8 — 核心引擎、实例、Agent、WebSocket
-- [x] Phase 9 — REST API + cmd/saas + FillBridge
-- [x] TradeRecord 落库与 client_order_id 幂等
-- [x] **Phase 10 — Ticker（cron Step 自动下单）**
-- [x] **Phase 11 — 前端 SPA（embed）**
-- [x] **Phase 12 — Docker Compose**
-- [x] **Phase 13 — K 线喂入 + Paper Demo**
+- [x] Phase 0–13 — 垂直切片（引擎 / 实例 / Agent / WS / API / Ticker / SPA / Docker / K线）
+- [x] **P0 — Paper Demo 固化 + CI**
 
-## 本地验证
+## 15 分钟 Paper Demo
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
-
-go test ./internal/saas/... ./internal/agent/... ./internal/quant/... -count=1
-go build -o bin/saas ./cmd/saas
-go build -o bin/agent ./cmd/agent
-go build -o bin/seed ./cmd/seed
+docker compose up --build -d
+until curl -sf http://127.0.0.1:8080/healthz; do sleep 1; done
+START_AGENT=1 ./scripts/demo_paper.sh
 ```
 
-## 启动
+期望输出含：`SUCCESS: instance … portfolio updated`。详见 [`docs/DEMO.md`](docs/DEMO.md)。
+
+## 本地验证 / CI
 
 ```bash
 export QS_JWT_SECRET=dev-secret-change-me
-export QS_DB_PASSWORD=...
-go run ./cmd/saas -config configs/config.yaml
-
-go run ./cmd/seed -config configs/config.yaml -users
-./scripts/demo_paper.sh
+make ci
+# 等价于 go mod tidy && go test … && go build saas/agent/seed
 ```
 
-## Docker
-
-```bash
-docker compose up --build
-```
-
-详见 `docs/PHASE13.md`。
+GitHub Actions：`.github/workflows/ci.yml`
 
 ## License
 
