@@ -38,6 +38,10 @@ type RunResult struct {
 	Generations int             `json:"generations"`
 	ParamPack   json.RawMessage `json:"param_pack"`
 	History     json.RawMessage `json:"history,omitempty"`
+	Benchmark   json.RawMessage `json:"benchmark,omitempty"`
+	WFO         json.RawMessage `json:"wfo,omitempty"`
+	PromoteSkipped bool         `json:"promote_skipped,omitempty"`
+	PromoteReason  string       `json:"promote_reason,omitempty"`
 }
 
 func NewService(db *store.DB, log *zap.Logger, runner Runner) *Service {
