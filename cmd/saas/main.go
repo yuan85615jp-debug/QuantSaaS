@@ -72,9 +72,29 @@ func main() {
 	tk.Start()
 	defer tk.Stop()
 
+	var prov market.Provider
+	switch strings.ToLower(cfg.Market.Provider) {
+	case "", "eastmoney":
+		prov = market.NewEastMoney()
+	default:
+		log.Warn("unknown market provider; using eastmoney", zap.String("provider", cfg.Market.Provider))
+		prov = market.NewEastMoney()
+	}
+	feedEnabled := cfg.Market.Enabled && (cfg.AppRole == config.RoleSaaS || cfg.AppRole == config.RoleDev)
+	feed := market.NewFeed(mktSvc, prov, market.InstanceSymbolSource{DB: db}, log, market.FeedConfig{
+		Enabled:  feedEnabled,
+		Provider: cfg.Market.Provider,
+		Symbols:  cfg.Market.Symbols,
+		Interval: cfg.Market.Interval,
+		Limit:    cfg.Market.Limit,
+		Every:    time.Duration(cfg.Market.EverySec) * time.Second,
+	})
+	feed.Start()
+	defer feed.Stop()
+
 	wsHandler := &ws.Handler{Hub: hub, Auth: authSvc, Log: log}
 	apiSrv := &api.Server{
-		Users: userSvc, Auth: authSvc, Inst: instSvc, Market: mktSvc, Hub: hub, Cfg: cfg, Log: log,
+		Users: userSvc, Auth: authSvc, Inst: instSvc, Market: mktSvc, Feed: feed, Hub: hub, Cfg: cfg, Log: log,
 	}
 	apiMux := apiSrv.Routes()
 
@@ -124,6 +144,7 @@ func main() {
 	defer cancel()
 	_ = httpSrv.Shutdown(ctx)
 	tk.Stop()
+	feed.Stop()
 	hub.Close()
 	log.Info("saas stopped")
 }
