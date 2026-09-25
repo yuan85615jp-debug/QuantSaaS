@@ -2,9 +2,11 @@
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.mod ./
+COPY go.sum* ./
+RUN go mod download || go mod tidy
 COPY . .
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/saas ./cmd/saas \
  && CGO_ENABLED=0 GOOS=linux go build -o /out/agent ./cmd/agent \
  && CGO_ENABLED=0 GOOS=linux go build -o /out/seed ./cmd/seed
