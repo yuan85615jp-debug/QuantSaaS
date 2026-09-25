@@ -10,10 +10,12 @@ saas:
   token: ""             # prefer env QS_AGENT_TOKEN (skips login)
 
 broker:
-  driver: paper         # paper | (future live drivers)
+  driver: paper         # paper | live
+  base_url: ""          # live gateway root
   api_key: ""           # prefer env QS_BROKER_API_KEY
   api_secret: ""        # prefer env QS_BROKER_API_SECRET
   account_id: ""
+  dry_run: true         # live: refuse real orders until wired
   commission_rate: 0.0003
   stamp_tax_rate: 0.001
   initial_cash: 100000  # paper only
