@@ -8,7 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is local-only. Broker secrets live here and NEVER leave the machine.
 type Config struct {
 	AgentID   string       `yaml:"agent_id"`
 	SaaS      SaaSConfig   `yaml:"saas"`
@@ -33,6 +32,8 @@ type BrokerConfig struct {
 	InitialCash    float64 `yaml:"initial_cash"`
 	LotStep        float64 `yaml:"lot_step"`
 	LotMin         float64 `yaml:"lot_min"`
+	BaseURL        string  `yaml:"base_url"`
+	DryRun         bool    `yaml:"dry_run"`
 }
 
 func Load(path string) (*Config, error) {
@@ -74,10 +75,12 @@ func (c *Config) Validate() error {
 	}
 	switch c.Broker.Driver {
 	case "paper":
-	default:
-		if c.Broker.APIKey == "" {
-			return fmt.Errorf("broker.api_key required for driver %q (set QS_BROKER_API_KEY)", c.Broker.Driver)
+	case "live":
+		if !c.Broker.DryRun && c.Broker.APIKey == "" {
+			return fmt.Errorf("broker.api_key required for live (or set dry_run: true / QS_BROKER_API_KEY)")
 		}
+	default:
+		return fmt.Errorf("unsupported broker.driver %q (paper|live)", c.Broker.Driver)
 	}
 	if c.Broker.CommissionRate < 0 {
 		c.Broker.CommissionRate = 0.0003
