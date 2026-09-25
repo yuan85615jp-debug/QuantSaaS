@@ -21,6 +21,12 @@ type seedKlinesBody struct {
 	StartPx  float64 `json:"start_px"`
 }
 
+type syncKlinesBody struct {
+	Symbol   string `json:"symbol"`
+	Interval string `json:"interval"`
+	Limit    int    `json:"limit"`
+}
+
 func (s *Server) handleImportKlines(w http.ResponseWriter, r *http.Request) {
 	if s.Market == nil {
 		writeError(w, http.StatusServiceUnavailable, "market service not configured")
@@ -49,10 +55,7 @@ func (s *Server) handleSeedKlines(w http.ResponseWriter, r *http.Request) {
 		body = seedKlinesBody{}
 	}
 	n, err := s.Market.SeedSynthetic(market.SeedOpts{
-		Symbol:   body.Symbol,
-		Interval: body.Interval,
-		Bars:     body.Bars,
-		StartPx:  body.StartPx,
+		Symbol: body.Symbol, Interval: body.Interval, Bars: body.Bars, StartPx: body.StartPx,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -107,4 +110,28 @@ func (s *Server) handleLastKline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"symbol": strings.ToUpper(symbol), "close": px, "open_time": ts,
 	})
+}
+
+func (s *Server) handleSyncKlines(w http.ResponseWriter, r *http.Request) {
+	if s.Feed == nil {
+		writeError(w, http.StatusServiceUnavailable, "market feed not configured")
+		return
+	}
+	var body syncKlinesBody
+	if err := decodeJSON(r, &body); err != nil {
+		body = syncKlinesBody{}
+	}
+	if body.Symbol != "" {
+		n, err := s.Feed.SyncSymbol(r.Context(), body.Symbol, body.Interval, body.Limit)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"symbol": body.Symbol, "imported": n, "interval": body.Interval,
+		})
+		return
+	}
+	result := s.Feed.SyncOnce(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"results": result})
 }
