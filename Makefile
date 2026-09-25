@@ -1,4 +1,4 @@
-.PHONY: test build saas agent seed demo ci tidy
+.PHONY: test build saas agent seed tvimport demo ci tidy vet
 
 export QS_JWT_SECRET ?= dev-secret-change-me
 export QS_DB_PASSWORD ?= quantsaas
@@ -6,10 +6,13 @@ export QS_DB_PASSWORD ?= quantsaas
 tidy:
 	go mod tidy
 
-test:
-	go test ./internal/quant/ ./internal/strategies/... ./internal/saas/... ./internal/agent/... -count=1
+vet:
+	go vet ./cmd/... ./internal/...
 
-build: saas agent seed
+test:
+	go test ./internal/quant/ ./internal/strategies/... ./internal/saas/... ./internal/agent/... ./cmd/tvimport/ -count=1 -timeout 120s
+
+build: saas agent seed tvimport
 
 saas:
 	go build -o bin/saas ./cmd/saas
@@ -20,7 +23,10 @@ agent:
 seed:
 	go build -o bin/seed ./cmd/seed
 
-ci: tidy test build
+tvimport:
+	go build -o bin/tvimport ./cmd/tvimport
+
+ci: tidy vet test build
 
 demo:
 	@echo "Ensure SaaS is up (docker compose up --build or go run ./cmd/saas)"

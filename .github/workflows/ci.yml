@@ -13,14 +13,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22.x"
-      - name: Tidy
-        run: go mod tidy
+      - name: Tidy (must be clean)
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy — commit go mod tidy" && exit 1)
+      - name: Vet
+        run: go vet ./cmd/... ./internal/...
       - name: Test
-        run: go test ./internal/quant/ ./internal/strategies/... ./internal/saas/... ./internal/agent/... -count=1
+        run: go test ./internal/quant/ ./internal/strategies/... ./internal/saas/... ./internal/agent/... ./cmd/tvimport/ -count=1 -timeout 120s
       - name: Build binaries
         run: |
           go build -o bin/saas ./cmd/saas
           go build -o bin/agent ./cmd/agent
           go build -o bin/seed ./cmd/seed
+          go build -o bin/tvimport ./cmd/tvimport
       - name: Verify go.sum present
-        run: test -f go.sum
+        run: test -f go.sum && test -s go.sum
