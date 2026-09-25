@@ -16,6 +16,7 @@ import (
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/auth"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/config"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/instance"
+	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/lab"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/market"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/store"
 	"github.com/yuan85615jp-debug/QuantSaaS/internal/saas/ticker"
@@ -40,10 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal("load config", zap.Error(err))
 	}
-	log.Info("saas starting",
-		zap.String("app_role", string(cfg.AppRole)),
-		zap.String("http_addr", cfg.Server.HTTPAddr),
-	)
+	log.Info("saas starting", zap.String("app_role", string(cfg.AppRole)), zap.String("http_addr", cfg.Server.HTTPAddr))
 
 	db, err := store.NewDB(cfg, log)
 	if err != nil {
@@ -64,9 +62,8 @@ func main() {
 	defer hub.Close()
 
 	tk := ticker.New(db, instSvc, hub, log, ticker.Config{
-		Interval:      time.Minute,
-		LookbackBars:  120,
-		Enabled:       cfg.AppRole == config.RoleSaaS || cfg.AppRole == config.RoleDev,
+		Interval: time.Minute, LookbackBars: 120,
+		Enabled: cfg.AppRole == config.RoleSaaS || cfg.AppRole == config.RoleDev,
 		AllowDispatch: cfg.AllowTradeDispatch(),
 	})
 	tk.Start()
@@ -82,19 +79,19 @@ func main() {
 	}
 	feedEnabled := cfg.Market.Enabled && (cfg.AppRole == config.RoleSaaS || cfg.AppRole == config.RoleDev)
 	feed := market.NewFeed(mktSvc, prov, market.InstanceSymbolSource{DB: db}, log, market.FeedConfig{
-		Enabled:  feedEnabled,
-		Provider: cfg.Market.Provider,
-		Symbols:  cfg.Market.Symbols,
-		Interval: cfg.Market.Interval,
-		Limit:    cfg.Market.Limit,
-		Every:    time.Duration(cfg.Market.EverySec) * time.Second,
+		Enabled: feedEnabled, Provider: cfg.Market.Provider, Symbols: cfg.Market.Symbols,
+		Interval: cfg.Market.Interval, Limit: cfg.Market.Limit,
+		Every: time.Duration(cfg.Market.EverySec) * time.Second,
 	})
 	feed.Start()
 	defer feed.Stop()
 
+	labRunner := &lab.GARunner{DB: db, Market: mktSvc, Log: log}
+	labSvc := lab.NewService(db, log, labRunner)
+
 	wsHandler := &ws.Handler{Hub: hub, Auth: authSvc, Log: log}
 	apiSrv := &api.Server{
-		Users: userSvc, Auth: authSvc, Inst: instSvc, Market: mktSvc, Feed: feed, Hub: hub, Cfg: cfg, Log: log,
+		Users: userSvc, Auth: authSvc, Inst: instSvc, Market: mktSvc, Feed: feed, Lab: labSvc, Hub: hub, Cfg: cfg, Log: log,
 	}
 	apiMux := apiSrv.Routes()
 
@@ -120,14 +117,10 @@ func main() {
 	})
 
 	httpSrv := &http.Server{
-		Addr:              cfg.Server.HTTPAddr,
-		Handler:           root,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		Addr: cfg.Server.HTTPAddr, Handler: root,
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second,
+		WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second,
 	}
-
 	go func() {
 		log.Info("http listening", zap.String("addr", cfg.Server.HTTPAddr))
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -139,7 +132,6 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 	log.Info("shutdown signal received")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(ctx)
