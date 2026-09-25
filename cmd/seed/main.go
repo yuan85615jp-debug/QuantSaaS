@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -15,9 +16,11 @@ import (
 func main() {
 	cfgPath := flag.String("config", "configs/config.yaml", "path to config.yaml")
 	symbol := flag.String("symbol", "510300", "symbol to seed")
-	bars := flag.Int("bars", 200, "number of 1m bars")
-	startPx := flag.Float64("start-px", 4.50, "starting price")
+	bars := flag.Int("bars", 200, "number of bars")
+	startPx := flag.Float64("start-px", 4.50, "starting price (synthetic only)")
 	users := flag.Bool("users", false, "also create demo user + agent accounts")
+	real := flag.Bool("real", false, "fetch real klines from eastmoney instead of synthetic")
+	interval := flag.String("interval", "1m", "bar interval when -real")
 	flag.Parse()
 
 	log, err := zap.NewDevelopment()
@@ -38,13 +41,25 @@ func main() {
 	defer db.Close() //nolint:errcheck
 
 	mkt := market.New(db)
-	n, err := mkt.SeedSynthetic(market.SeedOpts{
-		Symbol:  *symbol,
-		Bars:    *bars,
-		StartPx: *startPx,
-	})
-	if err != nil {
-		log.Fatal("seed klines", zap.Error(err))
+	var n int
+	if *real {
+		prov := market.NewEastMoney()
+		barsIn, err := prov.FetchKlines(context.Background(), *symbol, *interval, *bars)
+		if err != nil {
+			log.Fatal("fetch real klines", zap.Error(err))
+		}
+		n, err = mkt.ImportBars(*symbol, *interval, barsIn)
+		if err != nil {
+			log.Fatal("import real klines", zap.Error(err))
+		}
+		log.Info("real klines imported", zap.String("provider", prov.Name()), zap.Int("bars", n))
+	} else {
+		n, err = mkt.SeedSynthetic(market.SeedOpts{
+			Symbol: *symbol, Bars: *bars, StartPx: *startPx,
+		})
+		if err != nil {
+			log.Fatal("seed klines", zap.Error(err))
+		}
 	}
 	px, ts, _ := mkt.LastClose(*symbol)
 	log.Info("klines seeded",
