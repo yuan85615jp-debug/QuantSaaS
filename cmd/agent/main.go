@@ -43,18 +43,21 @@ func main() {
 	switch cfg.Broker.Driver {
 	case "paper", "":
 		b = broker.NewPaper(broker.PaperOpts{
-			InitialCash:    cfg.Broker.InitialCash,
-			CommissionRate: cfg.Broker.CommissionRate,
-			StampTaxRate:   cfg.Broker.StampTaxRate,
-			LotStep:        cfg.Broker.LotStep,
-			LotMin:         cfg.Broker.LotMin,
+			InitialCash: cfg.Broker.InitialCash, CommissionRate: cfg.Broker.CommissionRate,
+			StampTaxRate: cfg.Broker.StampTaxRate, LotStep: cfg.Broker.LotStep, LotMin: cfg.Broker.LotMin,
 		})
+	case "live":
+		b = broker.NewLive(broker.LiveOpts{
+			BaseURL: cfg.Broker.BaseURL, APIKey: cfg.Broker.APIKey, APISecret: cfg.Broker.APISecret,
+			AccountID: cfg.Broker.AccountID, LotStep: cfg.Broker.LotStep, LotMin: cfg.Broker.LotMin,
+			DryRun: cfg.Broker.DryRun,
+		})
+		log.Info("live broker selected", zap.String("name", b.Name()), zap.Bool("dry_run", cfg.Broker.DryRun || cfg.Broker.APIKey == ""))
 	default:
 		log.Fatal("unsupported broker driver", zap.String("driver", cfg.Broker.Driver))
 	}
 
 	ex := executor.New(b, cfg.AgentID)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	token, err := client.ResolveToken(ctx, cfg.SaaS.BaseURL, cfg.SaaS.Email, cfg.SaaS.Password, cfg.SaaS.Token)
@@ -67,12 +70,8 @@ func main() {
 	}
 
 	ws := &wsclient.Client{
-		BaseURL:     cfg.SaaS.BaseURL,
-		Token:       token,
-		AgentID:     cfg.AgentID,
-		InstanceIDs: cfg.Instances,
-		Executor:    ex,
-		Log:         log,
+		BaseURL: cfg.SaaS.BaseURL, Token: token, AgentID: cfg.AgentID, InstanceIDs: cfg.Instances,
+		Executor: ex, Log: log,
 		MarkPriceProvider: func(symbol string) float64 {
 			px, err := client.LastClose(context.Background(), cfg.SaaS.BaseURL, token, symbol)
 			if err != nil {
@@ -83,7 +82,6 @@ func main() {
 		},
 	}
 	go ws.Run(ctx)
-
 	log.Info("agent WS session started")
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
