@@ -53,6 +53,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/v1/lab/tasks", authMW(http.HandlerFunc(s.handleCreateLabTask)))
 	mux.Handle("GET /api/v1/lab/tasks", authMW(http.HandlerFunc(s.handleListLabTasks)))
 	mux.Handle("GET /api/v1/lab/tasks/{id}", authMW(http.HandlerFunc(s.handleGetLabTask)))
+	mux.Handle("GET /api/v1/research/regime", authMW(http.HandlerFunc(s.handleResearchRegime)))
 	mux.Handle("POST /api/v1/lab/tasks/{id}/run", authMW(http.HandlerFunc(s.handleRunLabTask)))
 	return mux
 }
