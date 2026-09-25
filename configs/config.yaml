@@ -23,3 +23,12 @@ redis:
 jwt:
   secret: "CHANGE_ME"   # set via QS_JWT_SECRET (required)
   expire_hour: 72
+
+# Real market feed (eastmoney A-share / ETF klines; no API key)
+market:
+  enabled: true
+  provider: eastmoney
+  symbols: ["510300"]
+  interval: "1m"
+  limit: 120
+  every_sec: 60
