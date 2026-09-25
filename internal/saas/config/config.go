@@ -8,10 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// AppRole controls which capabilities are enabled.
-// saas: live management + trade dispatch (no GA write)
-// lab:  GA + backtest only (no trade dispatch)
-// dev:  everything open
 type AppRole string
 
 const (
@@ -20,24 +16,24 @@ const (
 	RoleDev  AppRole = "dev"
 )
 
-// Config is the root configuration loaded from config.yaml + env overrides.
 type Config struct {
 	AppRole  AppRole        `yaml:"app_role"`
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Redis    RedisConfig    `yaml:"redis"`
 	JWT      JWTConfig      `yaml:"jwt"`
+	Market   MarketConfig   `yaml:"market"`
 }
 
 type ServerConfig struct {
-	HTTPAddr string `yaml:"http_addr"` // e.g. ":8080"
+	HTTPAddr string `yaml:"http_addr"`
 }
 
 type DatabaseConfig struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	User     string `yaml:"user"`
-	Password string `yaml:"password"` // prefer env: QS_DB_PASSWORD
+	Password string `yaml:"password"`
 	DBName   string `yaml:"dbname"`
 	SSLMode  string `yaml:"sslmode"`
 }
@@ -54,17 +50,25 @@ func (d DatabaseConfig) DSN() string {
 }
 
 type RedisConfig struct {
-	Addr     string `yaml:"addr"`     // e.g. "127.0.0.1:6379"
-	Password string `yaml:"password"` // prefer env: QS_REDIS_PASSWORD
+	Addr     string `yaml:"addr"`
+	Password string `yaml:"password"`
 	DB       int    `yaml:"db"`
 }
 
 type JWTConfig struct {
-	Secret     string `yaml:"secret"` // prefer env: QS_JWT_SECRET
+	Secret     string `yaml:"secret"`
 	ExpireHour int    `yaml:"expire_hour"`
 }
 
-// Load reads config from path, then overlays environment variables for secrets.
+type MarketConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	Provider string   `yaml:"provider"`
+	Symbols  []string `yaml:"symbols"`
+	Interval string   `yaml:"interval"`
+	Limit    int      `yaml:"limit"`
+	EverySec int      `yaml:"every_sec"`
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,7 +79,6 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	// Env overrides for secrets (never commit real values)
 	if v := os.Getenv("QS_APP_ROLE"); v != "" {
 		cfg.AppRole = AppRole(strings.ToLower(v))
 	}
@@ -96,6 +99,22 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("QS_HTTP_ADDR"); v != "" {
 		cfg.Server.HTTPAddr = v
+	}
+	if v := os.Getenv("QS_MARKET_ENABLED"); v != "" {
+		cfg.Market.Enabled = v == "1" || strings.EqualFold(v, "true")
+	}
+	if v := os.Getenv("QS_MARKET_SYMBOLS"); v != "" {
+		parts := strings.Split(v, ",")
+		cfg.Market.Symbols = nil
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				cfg.Market.Symbols = append(cfg.Market.Symbols, p)
+			}
+		}
+	}
+	if v := os.Getenv("QS_MARKET_INTERVAL"); v != "" {
+		cfg.Market.Interval = v
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -119,15 +138,28 @@ func (c *Config) Validate() error {
 	if c.Server.HTTPAddr == "" {
 		c.Server.HTTPAddr = ":8080"
 	}
+	if c.Market.Provider == "" {
+		c.Market.Provider = "eastmoney"
+	}
+	if c.Market.Interval == "" {
+		c.Market.Interval = "1m"
+	}
+	if c.Market.Limit <= 0 {
+		c.Market.Limit = 120
+	}
+	if c.Market.EverySec <= 0 {
+		c.Market.EverySec = 60
+	}
+	if len(c.Market.Symbols) == 0 {
+		c.Market.Symbols = []string{"510300"}
+	}
 	return nil
 }
 
-// AllowEvolution is true when GA task create/run is permitted.
 func (c *Config) AllowEvolution() bool {
 	return c.AppRole == RoleLab || c.AppRole == RoleDev
 }
 
-// AllowTradeDispatch is true when TradeCommand may be sent to agents.
 func (c *Config) AllowTradeDispatch() bool {
 	return c.AppRole == RoleSaaS || c.AppRole == RoleDev
 }
